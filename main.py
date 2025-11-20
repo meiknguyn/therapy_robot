@@ -2,7 +2,8 @@
 import requests
 
 from ai.gemini_client import analyze_emotion, chat_with_gemini
-from io.audio_io import listen, speak
+from audio_io.audio_io import listen, speak
+
 from modules.pomodoro import PomodoroTimer
 from modules.meditation_led import MeditationBreather
 
