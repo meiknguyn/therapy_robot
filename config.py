@@ -115,6 +115,19 @@ TREND_THRESHOLD = 0.5         # Minimum score difference to detect trend
 DAILY_SUMMARY_MIN_SESSIONS = 1  # Minimum sessions needed for summary
 
 # ============================================================
+# Log Rotation Configuration
+# ============================================================
+LOG_ROTATION_ENABLED = True
+LOG_MAX_BYTES = 5 * 1024 * 1024  # 5 MB default
+LOG_ROTATION_STRATEGY = "size"  # "size" or "daily"
+
+# ============================================================
+# Error Recovery Configuration
+# ============================================================
+HARDWARE_ERROR_RETRY_DELAY = 1.0  # Seconds to wait before retry after hardware error
+THREAD_ERROR_RETRY_DELAY = 5.0  # Seconds to wait before retrying thread operations
+
+# ============================================================
 # Utility Functions
 # ============================================================
 def get_project_root():

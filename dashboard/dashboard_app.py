@@ -6,6 +6,18 @@ import json
 from dashboard.csv_logger import CSVLogger
 from dashboard.mental_health_analyzer import MentalHealthAnalyzer
 
+# Import system status tracker
+try:
+    from utils.system_status import get_system_status, set_app_start_time
+    # Set app start time when dashboard starts
+    set_app_start_time()
+except ImportError:
+    # Fallback if system_status module not available
+    def get_system_status():
+        return {"error": "System status not available"}
+    def set_app_start_time():
+        pass
+
 app = Flask(__name__)
 
 chat_log = []
@@ -114,6 +126,24 @@ PAGE = """
           </div>
           <div class="mt-2">
             <small class="text-muted">Last updated: <span id="daily-summary-date">--</span></small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-dark text-white">
+          <h4 class="mb-0">⚙️ System Status</h4>
+        </div>
+        <div class="card-body">
+          <div id="system-status-content">
+            <p class="text-muted">Loading system status...</p>
+          </div>
+          <div class="mt-2">
+            <small class="text-muted">Last updated: <span id="system-status-update">--</span></small>
           </div>
         </div>
       </div>
@@ -478,20 +508,84 @@ async function loadDailySummary() {
   }
 }
 
+// Load system status
+async function loadSystemStatus() {
+  try {
+    const response = await fetch('/api/system-status');
+    const data = await response.json();
+    
+    const statusDiv = document.getElementById('system-status-content');
+    const updateSpan = document.getElementById('system-status-update');
+    
+    if (data.error) {
+      statusDiv.innerHTML = `<p class="text-danger">Error loading system status: ${data.error}</p>`;
+      return;
+    }
+    
+    // Format status HTML
+    let statusHTML = '<div class="row">';
+    
+    // Simulation mode
+    const simBadge = data.simulation_mode 
+      ? '<span class="badge bg-warning">SIMULATION MODE</span>' 
+      : '<span class="badge bg-success">REAL HARDWARE</span>';
+    statusHTML += `<div class="col-md-6 mb-3"><strong>Mode:</strong> ${simBadge}</div>`;
+    
+    // Uptime
+    statusHTML += `<div class="col-md-6 mb-3"><strong>Uptime:</strong> ${data.uptime_formatted || 'unknown'}</div>`;
+    
+    // AI Status
+    const aiStatus = data.ai?.status || 'unknown';
+    const aiBadge = aiStatus === 'ok' ? 'bg-success' : (aiStatus === 'error' ? 'bg-danger' : 'bg-secondary');
+    statusHTML += `<div class="col-md-6 mb-3"><strong>AI Status:</strong> <span class="badge ${aiBadge}">${aiStatus.toUpperCase()}</span></div>`;
+    
+    // Discord Status
+    const discordBadge = data.discord?.configured ? 'bg-success' : 'bg-warning';
+    const discordText = data.discord?.configured ? 'Configured' : 'Not Configured';
+    statusHTML += `<div class="col-md-6 mb-3"><strong>Discord:</strong> <span class="badge ${discordBadge}">${discordText}</span></div>`;
+    
+    statusHTML += '</div>';
+    
+    // Hardware components
+    if (data.hardware) {
+      statusHTML += '<hr/><h6>Hardware Components:</h6><div class="row">';
+      const components = ['LED', 'Joystick', 'Photoresistor', 'RotaryEncoder', 'FallDetector'];
+      for (const comp of components) {
+        const hwStatus = data.hardware[comp];
+        if (hwStatus) {
+          const statusBadge = hwStatus.status === 'ok' ? 'bg-success' : 
+                             (hwStatus.status === 'error' ? 'bg-danger' : 'bg-secondary');
+          statusHTML += `<div class="col-md-6 mb-2"><strong>${comp}:</strong> <span class="badge ${statusBadge}">${hwStatus.status.toUpperCase()}</span></div>`;
+        }
+      }
+      statusHTML += '</div>';
+    }
+    
+    statusDiv.innerHTML = statusHTML;
+    updateSpan.textContent = new Date().toLocaleTimeString();
+  } catch (error) {
+    console.error('Error loading system status:', error);
+    document.getElementById('system-status-content').innerHTML = 
+      '<p class="text-muted">Unable to load system status. Please try again later.</p>';
+  }
+}
+
 // Load all data on page load
 window.addEventListener('DOMContentLoaded', function() {
   loadStats();
   loadDailyChart();
   loadDailySummary();
+  loadSystemStatus();
   
   // Load other charts when tabs are clicked
   document.getElementById('weekly-tab').addEventListener('shown.bs.tab', loadWeeklyChart);
   document.getElementById('monthly-tab').addEventListener('shown.bs.tab', loadMonthlyChart);
   document.getElementById('yearly-tab').addEventListener('shown.bs.tab', loadYearlyChart);
   
-  // Refresh stats and summary every 30 seconds
+  // Refresh stats, summary, and status every 30 seconds
   setInterval(loadStats, 30000);
   setInterval(loadDailySummary, 30000);
+  setInterval(loadSystemStatus, 30000);
 });
 </script>
 
@@ -678,6 +772,21 @@ def api_mental_health_daily_summary():
             "average_score": 5.0,
             "has_data": False,
             "error": str(e)
+        }), 200  # Return 200 so UI can still render
+
+
+@app.route("/api/system-status")
+def api_system_status():
+    """Get system status including hardware, AI, and network status."""
+    try:
+        status = get_system_status()
+        return jsonify(status)
+    except Exception as e:
+        print(f"[Dashboard] Error getting system status: {e}")
+        return jsonify({
+            "error": str(e),
+            "simulation_mode": False,
+            "uptime_formatted": "unknown"
         }), 200  # Return 200 so UI can still render
 
 
