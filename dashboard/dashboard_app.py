@@ -102,6 +102,24 @@ PAGE = """
     </div>
   </div>
 
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h4 class="mb-0">📝 Today's Therapy Summary</h4>
+        </div>
+        <div class="card-body">
+          <div id="daily-summary-content">
+            <p class="text-muted">Loading summary...</p>
+          </div>
+          <div class="mt-2">
+            <small class="text-muted">Last updated: <span id="daily-summary-date">--</span></small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <ul class="nav nav-tabs mb-3" id="timePeriodTabs" role="tablist">
     <li class="nav-item" role="presentation">
       <button class="nav-link active" id="daily-tab" data-bs-toggle="tab" data-bs-target="#daily" type="button" role="tab">Daily (30 days)</button>
@@ -438,18 +456,42 @@ async function loadYearlyChart() {
   }
 }
 
+// Load daily summary
+async function loadDailySummary() {
+  try {
+    const response = await fetch('/api/mental-health/daily-summary');
+    const data = await response.json();
+    
+    const summaryDiv = document.getElementById('daily-summary-content');
+    const dateSpan = document.getElementById('daily-summary-date');
+    
+    if (data.summary) {
+      summaryDiv.innerHTML = `<p style="font-size: 1.1em; line-height: 1.6;">${data.summary.replace(/\n/g, '<br>')}</p>`;
+      dateSpan.textContent = data.date || new Date().toISOString().split('T')[0];
+    } else {
+      summaryDiv.innerHTML = '<p class="text-muted">No summary available yet.</p>';
+    }
+  } catch (error) {
+    console.error('Error loading daily summary:', error);
+    document.getElementById('daily-summary-content').innerHTML = 
+      '<p class="text-muted">Unable to load summary. Please try again later.</p>';
+  }
+}
+
 // Load all data on page load
 window.addEventListener('DOMContentLoaded', function() {
   loadStats();
   loadDailyChart();
+  loadDailySummary();
   
   // Load other charts when tabs are clicked
   document.getElementById('weekly-tab').addEventListener('shown.bs.tab', loadWeeklyChart);
   document.getElementById('monthly-tab').addEventListener('shown.bs.tab', loadMonthlyChart);
   document.getElementById('yearly-tab').addEventListener('shown.bs.tab', loadYearlyChart);
   
-  // Refresh stats every 30 seconds
+  // Refresh stats and summary every 30 seconds
   setInterval(loadStats, 30000);
+  setInterval(loadDailySummary, 30000);
 });
 </script>
 
@@ -589,6 +631,54 @@ def api_mental_health_yearly():
     """Get yearly mental health trends."""
     trends = health_analyzer.get_yearly_trends()
     return jsonify(trends)
+
+
+@app.route("/api/mental-health/daily-summary")
+def api_mental_health_daily_summary():
+    """Get AI-generated daily therapy summary."""
+    try:
+        # Get today's context
+        context = health_analyzer.get_daily_summary_context()
+        
+        # Generate summary using AI
+        try:
+            from ai.gemini_client import generate_daily_summary
+            summary_text = generate_daily_summary(context)
+        except Exception as e:
+            print(f"[Dashboard] Error generating AI summary: {e}")
+            # Fallback summary
+            if context.get("has_data"):
+                summary_text = (
+                    f"Today you had {context.get('session_count', 0)} therapy session(s). "
+                    "Your emotional well-being matters, and checking in with yourself is a positive step. "
+                    "Remember to be gentle with yourself."
+                )
+            else:
+                summary_text = "No sessions logged today. Remember, I'm here whenever you need to chat."
+        
+        # Get trend
+        trend = health_analyzer.compute_trend_for_period(days=7)
+        
+        return jsonify({
+            "summary": summary_text,
+            "date": context.get("date", datetime.now().date().isoformat()),
+            "trend": trend,
+            "session_count": context.get("session_count", 0),
+            "average_score": context.get("average_score", 5.0),
+            "has_data": context.get("has_data", False)
+        })
+    except Exception as e:
+        print(f"[Dashboard] Error in daily summary endpoint: {e}")
+        # Return safe fallback
+        return jsonify({
+            "summary": "Unable to generate summary at this time. Please try again later.",
+            "date": datetime.now().date().isoformat(),
+            "trend": "stable",
+            "session_count": 0,
+            "average_score": 5.0,
+            "has_data": False,
+            "error": str(e)
+        }), 200  # Return 200 so UI can still render
 
 
 if __name__ == "__main__":

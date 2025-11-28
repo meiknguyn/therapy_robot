@@ -6,6 +6,19 @@ Supports brightness control and breathing animation.
 """
 import time
 import threading
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    import config
+    import simulation
+except ImportError:
+    # Fallback for different import styles
+    from therapy_robot import config
+    from therapy_robot import simulation
 
 try:
     from gpiozero import PWMLED
@@ -15,35 +28,34 @@ except ImportError:
     PWMLED = None
 
 
-class LEDController:
+class RealLEDController:
     """
-    LED controller with brightness control and breathing animation.
+    Real LED controller implementation using gpiozero.
     Uses PWM for smooth brightness transitions.
     """
 
-    def __init__(self, led_pin=26):
+    def __init__(self, led_pin=None):
         """
         Initialize LED controller.
         
         Args:
-            led_pin: GPIO pin number for LED (default: 26, commonly used for PWM)
-                    Use Assignment 3 pin assignment here.
+            led_pin: GPIO pin number for LED (uses config.LED_PIN if None)
         """
-        self.led_pin = led_pin
+        self.led_pin = led_pin or config.LED_PIN
         self.breathing_active = False
         self.breathing_thread = None
         
-        if HAVE_GPIO and led_pin is not None:
+        if HAVE_GPIO and self.led_pin is not None:
             try:
-                self.led = PWMLED(led_pin)
-                print(f"[LED] Initialized on GPIO pin {led_pin}")
+                self.led = PWMLED(self.led_pin)
+                print(f"[LED] Initialized on GPIO pin {self.led_pin}")
             except Exception as e:
-                print(f"[LED] Failed to initialize GPIO pin {led_pin}: {e}")
+                print(f"[LED] Failed to initialize GPIO pin {self.led_pin}: {e}")
                 self.led = None
         else:
             self.led = None
             if not HAVE_GPIO:
-                print("[LED] gpiozero not available, using software simulation")
+                print("[LED] gpiozero not available, falling back to simulation")
 
     def set_brightness(self, value: float):
         """
@@ -61,17 +73,24 @@ class LEDController:
         else:
             print(f"[LED] brightness: {value:.2f}")
 
-    def breathing(self, cycles=None, duration=4.0, min_brightness=0.1, max_brightness=0.8, stop_event=None):
+    def breathing(self, cycles=None, duration=None, min_brightness=None, max_brightness=None, stop_event=None):
         """
         Start breathing animation in a separate thread.
         
         Args:
             cycles: Number of breathing cycles (None = infinite)
-            duration: Duration of one complete cycle (in/out) in seconds
-            min_brightness: Minimum brightness during breathing (0.0-1.0)
-            max_brightness: Maximum brightness during breathing (0.0-1.0)
+            duration: Duration of one complete cycle (in/out) in seconds (uses config if None)
+            min_brightness: Minimum brightness during breathing (uses config if None)
+            max_brightness: Maximum brightness during breathing (uses config if None)
             stop_event: Threading Event to stop breathing (optional)
         """
+        if duration is None:
+            duration = config.LED_BREATH_PERIOD_SEC
+        if min_brightness is None:
+            min_brightness = config.LED_BREATH_MIN_BRIGHTNESS
+        if max_brightness is None:
+            max_brightness = config.LED_BREATH_MAX_BRIGHTNESS
+            
         if self.breathing_active:
             self.stop_breathing()
         
@@ -92,8 +111,6 @@ class LEDController:
                     if not self.breathing_active or stop_event.is_set():
                         break
                     t = i / steps
-                    # Use sinusoidal curve for smooth breathing
-                    brightness = min_brightness + (max_brightness - min_brightness) * (0.5 - 0.5 * (1 - t))
                     brightness = min_brightness + (max_brightness - min_brightness) * (1 - (1 - t) ** 2)
                     self.set_brightness(brightness)
                     time.sleep(duration / (2 * steps))
@@ -131,4 +148,12 @@ class LEDController:
                 self.led.close()
             except:
                 pass
+
+
+# Export the appropriate LED controller based on simulation mode
+if config.USE_SIMULATION:
+    LEDController = simulation.SimulatedLED
+    print("[LED] Using simulated LED controller")
+else:
+    LEDController = RealLEDController
 

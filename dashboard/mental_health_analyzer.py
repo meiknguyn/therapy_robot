@@ -321,3 +321,131 @@ class MentalHealthAnalyzer:
             "previous_average": older_avg
         }
 
+    def get_daily_summary_context(self, date: datetime = None):
+        """
+        Build daily summary context for a specific date (defaults to today).
+        
+        Args:
+            date: Date to summarize (defaults to today)
+        
+        Returns:
+            Dict with aggregated daily data for summary generation
+        """
+        if date is None:
+            date = datetime.now()
+        
+        date_str = date.date().isoformat()
+        chats = self.load_chats()
+        
+        # Filter chats for today
+        today_chats = []
+        for chat in chats:
+            dt = self.parse_timestamp(chat["timestamp"])
+            if dt and dt.date().isoformat() == date_str:
+                today_chats.append(chat)
+        
+        if not today_chats:
+            return {
+                "date": date_str,
+                "session_count": 0,
+                "average_score": 5.0,
+                "dominant_emotions": [],
+                "high_mood_times": [],
+                "low_mood_times": [],
+                "has_data": False
+            }
+        
+        # Calculate statistics
+        scores = [chat["score"] for chat in today_chats]
+        avg_score = sum(scores) / len(scores)
+        
+        # Find dominant emotions
+        emotion_counts = defaultdict(int)
+        for chat in today_chats:
+            emotion = chat.get("emotion", "").lower()
+            if emotion:
+                emotion_counts[emotion] += 1
+        
+        dominant_emotions = sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+        dominant_emotions = [emo for emo, count in dominant_emotions]
+        
+        # Find high/low mood time windows (simple: morning/afternoon/evening)
+        time_windows = {"morning": [], "afternoon": [], "evening": []}
+        for chat in today_chats:
+            dt = self.parse_timestamp(chat["timestamp"])
+            if dt:
+                hour = dt.hour
+                if 6 <= hour < 12:
+                    time_windows["morning"].append(chat["score"])
+                elif 12 <= hour < 18:
+                    time_windows["afternoon"].append(chat["score"])
+                else:
+                    time_windows["evening"].append(chat["score"])
+        
+        high_mood_times = []
+        low_mood_times = []
+        
+        for period, period_scores in time_windows.items():
+            if period_scores:
+                avg_period_score = sum(period_scores) / len(period_scores)
+                if avg_period_score >= 7:
+                    high_mood_times.append(period)
+                elif avg_period_score <= 4:
+                    low_mood_times.append(period)
+        
+        return {
+            "date": date_str,
+            "session_count": len(today_chats),
+            "average_score": avg_score,
+            "dominant_emotions": dominant_emotions,
+            "high_mood_times": high_mood_times,
+            "low_mood_times": low_mood_times,
+            "score_range": {"min": min(scores), "max": max(scores)},
+            "has_data": True
+        }
+
+    def compute_trend_for_period(self, days: int = 7):
+        """
+        Compute trend classification for the last N days.
+        
+        Args:
+            days: Number of days to analyze
+        
+        Returns:
+            String: "improving", "stable", or "declining"
+        """
+        daily_trends = self.get_daily_trends(days=days * 2)  # Get more days for comparison
+        
+        if not daily_trends or len(daily_trends) < 3:
+            return "stable"
+        
+        # Get dates and averages
+        dates = sorted(daily_trends.keys())
+        
+        # Split into recent and previous periods
+        split_point = len(dates) // 2
+        recent_dates = dates[split_point:]
+        previous_dates = dates[:split_point]
+        
+        if not recent_dates or not previous_dates:
+            return "stable"
+        
+        recent_avg = sum(daily_trends[d]["average"] for d in recent_dates) / len(recent_dates)
+        previous_avg = sum(daily_trends[d]["average"] for d in previous_dates) / len(previous_dates)
+        
+        # Import config for threshold
+        try:
+            from therapy_robot import config
+            threshold = config.TREND_THRESHOLD
+        except:
+            threshold = 0.5
+        
+        diff = recent_avg - previous_avg
+        
+        if diff > threshold:
+            return "improving"
+        elif diff < -threshold:
+            return "declining"
+        else:
+            return "stable"
+

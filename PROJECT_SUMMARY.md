@@ -31,9 +31,9 @@ therapy_robot/
 │   └── README.md         # Safety documentation
 │
 ├── dashboard/            # Web dashboard
-│   ├── dashboard_app.py  # Main Flask app
+│   ├── dashboard_app.py  # Main Flask app with charts & summaries
 │   ├── csv_logger.py     # CSV logging system
-│   ├── mental_health_analyzer.py  # Mental health analysis
+│   ├── mental_health_analyzer.py  # Mental health analysis & trends
 │   ├── LOGGING.md        # Logging documentation
 │   └── MENTAL_HEALTH_TRACKING.md  # Tracking docs
 │
@@ -44,31 +44,70 @@ therapy_robot/
 ├── assets/               # Media assets
 │   └── music/            # Ambient music files
 │
+├── config.py             # Central configuration (NEW!)
+├── simulation.py         # Hardware simulation mode (NEW!)
 ├── main.py               # Main application entry point
 ├── requirements.txt      # Python dependencies
 ├── HARDWARE_PINS.md      # Pin assignment reference
+├── REFACTORING_STATUS.md # Refactoring status documentation
 └── PROJECT_SUMMARY.md    # This file
 ```
+
+---
+
+## 🆕 Latest Refactoring Features (2024)
+
+### Central Configuration System (`config.py`)
+- **Single source of truth** for all pins, thresholds, paths, and settings
+- **Environment variable support** for API keys and Discord webhook
+- **Hardware pin assignments** centralized from Assignment 3
+- **Thresholds and timings** configurable in one place
+- **Path configuration** for logs, music, proofs directories
+
+### Hardware Simulation Mode (`simulation.py`)
+- **Run without physical hardware** for development/testing
+- **Simulated implementations** of all hardware components:
+  - SimulatedLED - logs brightness changes
+  - SimulatedPhotoresistor - returns varying light readings
+  - SimulatedJoystick - no input (simulation only)
+  - SimulatedRotaryEncoder - no input (simulation only)
+  - SimulatedFallDetector - never detects falls (for safety)
+- **Controlled by environment variable**: `THERAPY_ROBOT_SIMULATION=1`
+- **Full feature compatibility** - all modules work in simulation mode
+
+### AI Rate Limiting
+- **Thread-safe caching** for emotion analysis
+- **Configurable cache duration** (default: 15 seconds)
+- **Prevents excessive API calls** to Gemini
+- **Seamless integration** - no changes to calling code
+
+### Enhanced Mental Health Tracking
+- **Daily Summary Generation**: AI-powered end-of-day summaries
+- **Trend Forecasting**: Classifies trends as improving/stable/declining
+- **Enhanced Analytics**: More detailed statistics and insights
+- **Dashboard Integration**: Daily summary card with AI-generated insights
 
 ---
 
 ## 🔧 Hardware Modules Implemented
 
 ### 1. LED Controller (`hardware/led_ctrl.py`)
-- **GPIO Pin**: 26 (configurable, PWM-capable)
+- **GPIO Pin**: 26 (from `config.LED_PIN`, configurable, PWM-capable)
 - **Features**:
   - Brightness control (0.0-1.0)
-  - Smooth breathing animation
+  - Smooth breathing animation (configurable via config)
   - Thread-safe operation
   - Used during meditation sessions
+  - **Supports simulation mode** - can run without hardware
 
 ### 2. Photoresistor/LDR (`hardware/photoresistor.py`)
-- **ADC Channel**: 4 (MCP3208 via SPI)
+- **ADC Channel**: 4 (from `config.ADC_CHANNEL_LDR`, MCP3208 via SPI)
 - **Features**:
   - Normalized readings (0.0-1.0)
   - Automatic logging of ambient light
-  - Auto-start music in dark environments
+  - Auto-start music in dark environments (threshold from config)
   - Uses Assignment 3 SPI configuration
+  - **Supports simulation mode** - returns simulated light readings
 
 ### 3. Joystick (`hardware/joystick.py`)
 - **ADC Channels**: 0 (X-axis), 1 (Y-axis)
@@ -178,6 +217,23 @@ therapy_robot/
 
 ---
 
+## 🆕 AI Rate Limiting
+
+### Implementation (`ai/gemini_client.py`)
+- **Thread-safe cache** prevents excessive API calls
+- **Configurable duration**: `config.GEMINI_EMOTION_CACHE_SECONDS` (default: 15 seconds)
+- **Automatic caching**: Returns cached emotion result if within time window
+- **Transparent operation**: No changes needed to calling code
+
+### Daily Summary Generation
+- **AI-powered summaries** using Gemini API
+- **Context-aware prompts** based on daily statistics
+- **Friendly, caring tone** - not clinical or robotic
+- **Fallback summaries** if AI unavailable
+- **2-4 sentences** with gentle suggestions
+
+---
+
 ## 📈 Mental Health Tracking Dashboard
 
 ### Web Dashboard (`dashboard/dashboard_app.py`)
@@ -206,15 +262,23 @@ therapy_robot/
 #### 2. Interactive Charts
 - **Daily View**: Line chart (last 30 days)
 - **Weekly View**: Line chart (last 12 weeks)
-- **Weekly View**: Bar chart (last 12 months)
+- **Monthly View**: Bar chart (last 12 months)
 - **Yearly View**: Bar chart (all years)
 
-#### 3. API Endpoints
+#### 3. Daily Therapy Summary Card (NEW!)
+- **AI-generated daily summary** with caring, supportive tone
+- **Today's statistics**: session count, average score
+- **Trend indicator**: showing improving/stable/declining
+- **Auto-refreshes** every 30 seconds
+- **Context-aware insights** based on daily emotional patterns
+
+#### 4. API Endpoints
 - `/api/mental-health/stats` - Overall statistics
 - `/api/mental-health/daily` - Daily trends
 - `/api/mental-health/weekly` - Weekly trends
 - `/api/mental-health/monthly` - Monthly trends
 - `/api/mental-health/yearly` - Yearly trends
+- `/api/mental-health/daily-summary` - **AI-generated daily summary (NEW!)**
 
 ---
 
@@ -388,6 +452,40 @@ User Input → Main.py → Module/Feature → Event Log
 
 ---
 
+## 🔧 Configuration & Simulation
+
+### Central Configuration (`config.py`)
+All settings centralized in one file:
+- **SPI/ADC**: Device paths, channels, speeds
+- **GPIO**: Pin assignments, chip paths
+- **Thresholds**: Fall detection, ambient light, timing parameters
+- **Paths**: Music directory, log directory, proofs directory
+- **Environment Variables**: API keys, Discord webhook URL
+
+### Simulation Mode
+Run without hardware using `THERAPY_ROBOT_SIMULATION=1`:
+```bash
+export THERAPY_ROBOT_SIMULATION=1
+python therapy_robot/main.py
+```
+
+**Benefits**:
+- Test on any computer (laptop, desktop)
+- Develop without physical hardware
+- Demo the system easily
+- Debug features without GPIO access
+
+**What Works in Simulation**:
+- ✅ All software features (music, dashboard, logging, AI)
+- ✅ Ambient music playback
+- ✅ Camera capture (if camera available)
+- ✅ Dashboard and charts
+- ✅ CSV logging
+- ✅ AI chat and daily summaries
+- ⚠️ Hardware controls log actions but don't control real hardware
+
+---
+
 ## 🔗 Repository
 
 **GitHub**: https://github.com/meiknguyn/therapy_robot
@@ -399,6 +497,7 @@ All code is version controlled and documented.
 ## 📞 Next Steps / Future Enhancements
 
 Potential improvements:
+- Complete hardware module refactoring (joystick, rotary, fall_detector)
 - Machine learning for emotion detection accuracy
 - More sophisticated fall detection algorithms
 - Additional safety sensors
@@ -407,8 +506,9 @@ Potential improvements:
 - Advanced analytics and insights
 - Goal setting and achievement tracking
 - Integration with health tracking devices
+- Voice recognition integration
 
 ---
 
-**Project Status**: ✅ **COMPLETE** - All core features implemented and documented!
+**Project Status**: ✅ **FEATURE COMPLETE** - All core features + refactoring improvements implemented and documented!
 

@@ -5,6 +5,18 @@ Uses the same ADC pin/path from Assignment 3 (MCP3208 via SPI).
 Provides normalized readings (0.0 to 1.0) and event logging.
 """
 import time
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    import config
+    import simulation
+except ImportError:
+    from therapy_robot import config
+    from therapy_robot import simulation
 
 try:
     import spidev
@@ -13,44 +25,37 @@ except ImportError:
     HAVE_SPI = False
     spidev = None
 
-# ADC Configuration from Assignment 3
-ADC_CHANNEL = 4  # Using channel 4 for photoresistor (unused in A3)
-SPI_DEVICE = 0   # SPI device 0
-SPI_CHIP_SELECT = 0  # CS0
-SPI_MAX_SPEED = 1000000  # 1 MHz
-ADC_MAX_VALUE = 4095  # 12-bit ADC
 
-
-class Photoresistor:
+class RealPhotoresistor:
     """
     Photoresistor (LDR) reader using MCP3208 ADC via SPI.
     Uses the same SPI configuration as Assignment 3.
     """
 
-    def __init__(self, adc_channel=ADC_CHANNEL, log_callback=None):
+    def __init__(self, adc_channel=None, log_callback=None):
         """
         Initialize photoresistor reader.
         
         Args:
-            adc_channel: ADC channel number (0-7) on MCP3208
+            adc_channel: ADC channel number (0-7) on MCP3208 (uses config if None)
             log_callback: Optional callback function(event_type, details) for logging
         """
-        self.adc_channel = adc_channel
+        self.adc_channel = adc_channel or config.ADC_CHANNEL_LDR
         self.log_callback = log_callback
         self.spi = None
         
         if HAVE_SPI:
             try:
                 self.spi = spidev.SpiDev()
-                self.spi.open(SPI_DEVICE, SPI_CHIP_SELECT)
-                self.spi.max_speed_hz = SPI_MAX_SPEED
-                self.spi.mode = 0  # SPI mode 0 (CPOL=0, CPHA=0)
-                print(f"[Photoresistor] Initialized on ADC channel {adc_channel}")
+                self.spi.open(0, 0)  # SPI device 0, CS0
+                self.spi.max_speed_hz = config.SPI_MAX_SPEED_HZ
+                self.spi.mode = config.SPI_MODE
+                print(f"[Photoresistor] Initialized on ADC channel {self.adc_channel}")
             except Exception as e:
                 print(f"[Photoresistor] Failed to initialize SPI: {e}")
                 self.spi = None
         else:
-            print("[Photoresistor] spidev not available, using software simulation")
+            print("[Photoresistor] spidev not available, falling back to simulation")
 
     def _read_adc_raw(self):
         """
@@ -110,7 +115,7 @@ class Photoresistor:
             return 0.0
         
         # Normalize to 0.0-1.0 range
-        normalized = raw / ADC_MAX_VALUE
+        normalized = raw / config.ADC_MAX_VALUE
         
         # Log the reading
         if self.log_callback:
@@ -121,18 +126,28 @@ class Photoresistor:
         
         return normalized
 
-    def is_dark(self, threshold=0.3):
+    def is_dark(self, threshold=None):
         """
         Check if environment is dark based on threshold.
         
         Args:
-            threshold: Threshold value (0.0-1.0), below which is considered dark
+            threshold: Threshold value (0.0-1.0), below which is considered dark (uses config if None)
         
         Returns:
             True if dark, False otherwise
         """
+        if threshold is None:
+            threshold = config.AMBIENT_DARK_THRESHOLD
         normalized = self.read_normalized()
         return normalized < threshold
+
+
+# Export the appropriate photoresistor based on simulation mode
+if config.USE_SIMULATION:
+    Photoresistor = simulation.SimulatedPhotoresistor
+    print("[Photoresistor] Using simulated photoresistor")
+else:
+    Photoresistor = RealPhotoresistor
 
     def cleanup(self):
         """Clean up SPI resources."""
