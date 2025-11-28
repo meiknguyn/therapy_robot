@@ -1,0 +1,6 @@
+# Log files - ignore CSV files but keep directory structure
+*.csv
+
+# But don't ignore this .gitignore file itself
+!.gitignore
+

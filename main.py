@@ -20,6 +20,10 @@ from audio.speaker import Speaker
 from modules.ambient_music import AmbientMusic
 from modules.camera_capture import CameraCapture
 
+# Safety modules
+from safety.fall_detector import FallDetector
+from safety.health_alert import HealthAlert
+
 DASHBOARD_BASE = "http://127.0.0.1:5000"
 CHAT_LOG_URL = f"{DASHBOARD_BASE}/api/log_chat"
 EVENT_LOG_URL = f"{DASHBOARD_BASE}/api/log_event"
@@ -133,6 +137,30 @@ def main_loop():
     rotary.start_polling()
     
     # ============================================================
+    # Safety System (Fall Detection & Health Alert)
+    # ============================================================
+    
+    # Health Alert System
+    health_alert = HealthAlert(
+        speak_callback=speak,
+        listen_callback=listen,
+        log_callback=lambda et, d: log_event(et, d)
+    )
+    
+    # Fall Detector callback
+    def fall_detected_callback():
+        """Called when fall is detected - trigger health check"""
+        print("[MAIN] Fall detected! Initiating health check...")
+        health_alert.check_on_user()
+    
+    # Initialize fall detector (uses accelerometer ADC channels 2, 3, 7)
+    fall_detector = FallDetector(
+        fall_callback=fall_detected_callback,
+        log_callback=lambda et, d: log_event(et, d)
+    )
+    fall_detector.start_monitoring()
+    
+    # ============================================================
     # Existing Module Instances
     # ============================================================
     pomodoro = PomodoroTimer(
@@ -178,7 +206,7 @@ def main_loop():
     # ============================================================
     # Welcome Message
     # ============================================================
-    speak("Hi, I'm your therapy assistant. You can chat with me, say 'start focus' for a focus session, 'start meditation' for breathing, 'play music' for ambient music, 'capture' for a photo, or 'check light' to see ambient light level. Type 'quit' when you're done.")
+    speak("Hi, I'm your therapy assistant. You can chat with me, say 'start focus' for a focus session, 'start meditation' for breathing, 'play music' for ambient music, 'capture' for a photo, 'check light' to see ambient light level, or 'test alert' to test Discord alerts. Type 'quit' when you're done. I'm also monitoring for falls and will check on you if needed.")
 
     # ============================================================
     # Main Command Loop
@@ -229,6 +257,16 @@ def main_loop():
             else:
                 speak(f"Ambient light is bright, about {percentage} percent.")
             continue
+        
+        # Command: Test Discord Alert
+        if "test alert" in lowered or "test discord" in lowered:
+            speak("Sending a test Discord alert to verify configuration.")
+            success = health_alert.test_discord_alert()
+            if success:
+                speak("Test alert sent successfully. Check your Discord channel.")
+            else:
+                speak("Failed to send test alert. Check your Discord webhook configuration.")
+            continue
 
         # Command: Pomodoro / focus
         if "pomodoro" in lowered or "focus" in lowered or "study" in lowered:
@@ -258,6 +296,7 @@ def main_loop():
     
     # Cleanup on exit
     print("[MAIN] Cleaning up hardware...")
+    fall_detector.cleanup()
     joystick.cleanup()
     rotary.cleanup()
     photoresistor.cleanup()

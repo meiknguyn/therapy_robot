@@ -4,6 +4,9 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 google-generativeai>=0.3.0
 
+# Web dashboard
+flask>=3.0.0
+
 # Hardware interfaces
 gpiozero>=1.6.2
 spidev>=3.6

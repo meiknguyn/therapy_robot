@@ -13,10 +13,10 @@ This document lists the GPIO and ADC pin assignments used in this project, match
 **Channel Assignments:**
 - Channel 0: Joystick X-axis
 - Channel 1: Joystick Y-axis  
-- Channel 2: Accelerometer X (Assignment 3, not used in therapy robot)
-- Channel 3: Accelerometer Y (Assignment 3, not used in therapy robot)
+- Channel 2: **Accelerometer X** ← Used for fall detection
+- Channel 3: **Accelerometer Y** ← Used for fall detection
 - Channel 4: **Photoresistor (LDR)** ← New for therapy robot
-- Channel 7: Accelerometer Z (Assignment 3, not used in therapy robot)
+- Channel 7: **Accelerometer Z** ← Used for fall detection
 
 ## GPIO (Rotary Encoder)
 
