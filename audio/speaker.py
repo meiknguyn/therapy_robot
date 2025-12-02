@@ -4,6 +4,20 @@ Speaker Module for Ambient Music Playback
 Uses pygame mixer for non-blocking background playback.
 """
 import os
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    import config
+except ImportError:
+    try:
+        from therapy_robot import config
+    except ImportError:
+        config = None
+
 import pygame
 import threading
 import time
@@ -23,13 +37,34 @@ class Speaker:
     Uses pygame mixer for non-blocking playback.
     """
 
-    def __init__(self, music_dir="assets/music"):
+    def __init__(self, music_dir=None):
         """
         Initialize speaker.
         
         Args:
-            music_dir: Directory containing music files
+            music_dir: Directory containing music files (uses config.MUSIC_DIR if None)
         """
+        # Use config if available, otherwise default
+        if music_dir is None:
+            if config and hasattr(config, 'MUSIC_DIR'):
+                music_dir = config.MUSIC_DIR
+                # Resolve path relative to project root if config provides a function
+                if config and hasattr(config, 'get_project_root'):
+                    project_root = config.get_project_root()
+                    music_dir = str(project_root / music_dir)
+            else:
+                music_dir = "assets/music"
+        
+        # Store as resolved absolute path for reliability
+        if not os.path.isabs(music_dir):
+            # If relative, try to resolve from project root or current directory
+            if config and hasattr(config, 'get_project_root'):
+                project_root = config.get_project_root()
+                music_dir = str(project_root / music_dir)
+            else:
+                # Fallback: resolve from current working directory
+                music_dir = os.path.abspath(music_dir)
+        
         self.music_dir = music_dir
         self.current_file = None
         self.volume = 0.7  # Default volume (0.0 to 1.0)
@@ -41,8 +76,15 @@ class Speaker:
         
         # Ensure music directory exists
         if not os.path.exists(music_dir):
-            print(f"[Speaker] Music directory '{music_dir}' does not exist")
+            print(f"[Speaker] Music directory '{music_dir}' does not exist, creating...")
             os.makedirs(music_dir, exist_ok=True)
+        
+        # List available files on startup
+        available = self.list_available_files()
+        if available:
+            print(f"[Speaker] Found {len(available)} music file(s): {', '.join(available)}")
+        else:
+            print(f"[Speaker] Warning: No music files found in '{music_dir}'. Supported formats: .wav, .mp3, .ogg, .flac")
 
     def set_volume(self, value: float):
         """
@@ -94,6 +136,8 @@ class Speaker:
                 pygame.mixer.music.stop()
             
             # Load and play the file
+            # For WAV files, pygame.mixer.music should work, but if it fails,
+            # we can try loading it as a sound object (though that's less ideal for music)
             pygame.mixer.music.load(filepath)
             pygame.mixer.music.set_volume(self.volume)
             
@@ -105,10 +149,20 @@ class Speaker:
             
             self.current_file = filename
             self.is_playing = True
-            print(f"[Speaker] Playing: {filename} (loop={loop})")
+            
+            # Get file info for logging
+            file_size = os.path.getsize(filepath) / (1024 * 1024)  # Size in MB
+            print(f"[Speaker] Playing: {filename} (loop={loop}, size={file_size:.2f} MB)")
             return True
+        except pygame.error as e:
+            print(f"[Speaker] Pygame error playing file '{filename}': {e}")
+            print(f"[Speaker] This might be a file format issue. Try converting the file or check if it's a valid audio file.")
+            self.is_playing = False
+            return False
         except Exception as e:
-            print(f"[Speaker] Error playing file: {e}")
+            print(f"[Speaker] Error playing file '{filename}': {e}")
+            import traceback
+            traceback.print_exc()
             self.is_playing = False
             return False
 

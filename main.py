@@ -69,8 +69,13 @@ def main_loop():
         log_callback=lambda et, d: log_event(et, d)
     )
     
-    # Speaker for ambient music
-    speaker = Speaker(music_dir="assets/music")
+    # Speaker for ambient music (use config for path)
+    try:
+        from therapy_robot import config
+        music_dir = config.MUSIC_DIR
+    except ImportError:
+        music_dir = "assets/music"
+    speaker = Speaker(music_dir=music_dir)
     
     # Ambient Music Controller
     ambient_music = AmbientMusic(

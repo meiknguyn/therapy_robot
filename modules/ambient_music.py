@@ -32,7 +32,9 @@ class AmbientMusic:
         """Refresh list of available music tracks."""
         self.track_list = self.speaker.list_available_files()
         if not self.track_list:
-            print("[AmbientMusic] No music files found in assets/music/")
+            print(f"[AmbientMusic] No music files found in {self.speaker.music_dir}/")
+        else:
+            print(f"[AmbientMusic] Available tracks: {', '.join(self.track_list)}")
 
     def _log(self, event_type: str, details: dict):
         """Log event using callback."""
