@@ -16,6 +16,7 @@ pygame>=2.5.0
 
 # Camera support
 opencv-python>=4.8.0
+Pillow>=10.0.0
 
 # Optional: gpiod Python bindings for rotary encoder
 # If not available, the rotary encoder will use software simulation

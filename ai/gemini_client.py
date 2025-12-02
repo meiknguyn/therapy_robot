@@ -1,10 +1,11 @@
 import os
 import threading
 import time
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from dotenv import load_dotenv
 import google.generativeai as genai
+from PIL import Image
 
 # Import config for rate limiting settings
 try:
@@ -251,6 +252,62 @@ Daily Summary:
                 "Tomorrow, try to notice one moment of peace or gratitude. "
                 "You're making progress just by being here."
             )
+
+
+def analyze_emotion_from_image(image: Union[Image.Image, str]) -> str:
+    """
+    Detect emotion from a camera image using Gemini vision capabilities.
+    
+    Args:
+        image: PIL Image object or path to image file
+    
+    Returns:
+        Emotion string (one of ALLOWED_EMOTIONS), defaults to "neutral" on error
+    """
+    # Handle image path string
+    if isinstance(image, str):
+        try:
+            image = Image.open(image)
+        except Exception as e:
+            print(f"[Gemini][analyze_emotion_from_image] Error opening image: {e}")
+            return "neutral"
+    
+    if not isinstance(image, Image.Image):
+        print("[Gemini][analyze_emotion_from_image] Invalid image type")
+        return "neutral"
+    
+    # Prompt for emotion detection
+    prompt = f"""
+Analyze this person's facial expression and detect their emotion.
+
+Respond with ONLY ONE WORD from this list: {", ".join(ALLOWED_EMOTIONS)}
+
+Rules:
+- Look at facial expression, body language, and overall demeanor
+- Respond with ONLY the emotion word, lowercase
+- No punctuation, no explanation, no additional text
+- Choose the most dominant emotion you see
+
+If unsure or no clear emotion, respond with "neutral".
+"""
+    
+    try:
+        response = model.generate_content([prompt, image])
+        raw_emotion = (response.text or "").strip().lower()
+        
+        # Map to allowed emotions
+        emotion_result = "neutral"
+        for emo in ALLOWED_EMOTIONS:
+            if emo in raw_emotion:
+                emotion_result = emo
+                break
+        
+        print(f"[Gemini][analyze_emotion_from_image] Detected emotion: {emotion_result}")
+        return emotion_result
+        
+    except Exception as e:
+        print(f"[Gemini][analyze_emotion_from_image] Error: {e}")
+        return "neutral"
 
 
 if __name__ == "__main__":

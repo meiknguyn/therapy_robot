@@ -2,6 +2,8 @@
 import requests
 import threading
 import time
+from datetime import datetime
+import os
 
 from ai.gemini_client import analyze_emotion, chat_with_gemini
 from audio_io.audio_io import listen, speak
@@ -206,7 +208,7 @@ def main_loop():
     # ============================================================
     # Welcome Message
     # ============================================================
-    speak("Hi, I'm your therapy assistant. You can chat with me, say 'start focus' for a focus session, 'start meditation' for breathing, 'play music' for ambient music, 'capture' for a photo, 'check light' to see ambient light level, or 'test alert' to test Discord alerts. Type 'quit' when you're done. I'm also monitoring for falls and will check on you if needed.")
+    speak("Hi, I'm your therapy assistant. You can chat with me, say 'start focus' for a focus session, 'start meditation' for breathing, 'play music' for ambient music, 'capture' for a photo, 'detect emotion' to analyze your emotion from camera, 'check light' to see ambient light level, or 'test alert' to test Discord alerts. Type 'quit' when you're done. I'm also monitoring for falls and will check on you if needed.")
 
     # ============================================================
     # Main Command Loop
@@ -244,6 +246,36 @@ def main_loop():
                 speak(f"Picture saved successfully.")
             else:
                 speak("Sorry, I couldn't take the picture.")
+            continue
+        
+        # Command: Detect Emotion from Camera
+        if "detect emotion" in lowered or "emotion from camera" in lowered or "check my emotion" in lowered or "analyze my face" in lowered:
+            speak("Looking at you now to detect your emotion. Please look at the camera.")
+            emotion, image = camera.capture_and_analyze_emotion()
+            if emotion:
+                # Save the image used for emotion detection
+                if image:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    emotion_image_path = os.path.join("proofs", f"emotion_{emotion}_{timestamp}.jpg")
+                    image.save(emotion_image_path)
+                    print(f"[MAIN] Saved emotion detection image: {emotion_image_path}")
+                
+                # Generate personalized greeting with detected emotion
+                greeting_msg = f"You look {emotion} today. Would you like to talk about it?"
+                speak(greeting_msg)
+                
+                # Log the camera-based emotion detection
+                log_event("camera_emotion_detected", {
+                    "emotion": emotion,
+                    "source": "camera",
+                    "image_path": emotion_image_path if image else None
+                })
+                
+                # Optionally use this emotion for the next chat interaction
+                # (user can continue chatting naturally)
+                print(f"[MAIN] Camera detected emotion: {emotion}")
+            else:
+                speak("Sorry, I couldn't detect your emotion. Could you try again or describe how you're feeling?")
             continue
         
         # Command: Check Light

@@ -2,10 +2,12 @@
 """
 Camera Capture Module
 Uses OpenCV for image capture and saving.
+Supports capturing frames for emotion detection.
 """
 import os
 import cv2
 from datetime import datetime
+from PIL import Image
 
 
 class CameraCapture:
@@ -126,6 +128,89 @@ class CameraCapture:
                 files.append(filename)
         
         return sorted(files, reverse=True)  # Most recent first
+
+    def capture_frame_for_analysis(self, camera_index=0):
+        """
+        Capture a frame from camera and return it as a PIL Image for analysis.
+        Does not save to disk - used for emotion detection.
+        
+        Args:
+            camera_index: Camera device index (default: 0)
+        
+        Returns:
+            PIL Image object, or None on error
+        """
+        try:
+            cap = cv2.VideoCapture(camera_index)
+            
+            if not cap.isOpened():
+                print(f"[Camera] Could not open camera device {camera_index}")
+                return None
+            
+            # Capture frame
+            ret, frame = cap.read()
+            cap.release()
+            
+            if not ret or frame is None:
+                print("[Camera] Failed to capture frame")
+                return None
+            
+            # Convert BGR to RGB for PIL
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Convert to PIL Image
+            pil_image = Image.fromarray(frame_rgb)
+            
+            print(f"[Camera] Frame captured for analysis (size: {pil_image.size})")
+            return pil_image
+                
+        except Exception as e:
+            print(f"[Camera] Error capturing frame for analysis: {e}")
+            return None
+    
+    def capture_and_analyze_emotion(self, camera_index=0):
+        """
+        Capture a frame and detect emotion from it.
+        Convenience method that combines capture and emotion detection.
+        
+        Args:
+            camera_index: Camera device index (default: 0)
+        
+        Returns:
+            Tuple (emotion: str, image: PIL.Image) or (None, None) on error
+        """
+        try:
+            # Try different import paths
+            try:
+                from therapy_robot.ai.gemini_client import analyze_emotion_from_image
+            except ImportError:
+                try:
+                    from ai.gemini_client import analyze_emotion_from_image
+                except ImportError:
+                    import sys
+                    from pathlib import Path
+                    sys.path.insert(0, str(Path(__file__).parent.parent))
+                    from ai.gemini_client import analyze_emotion_from_image
+            
+            image = self.capture_frame_for_analysis(camera_index)
+            if image is None:
+                return None, None
+            
+            emotion = analyze_emotion_from_image(image)
+            
+            # Log the event
+            self._log("camera_emotion_detection", {
+                "emotion": emotion,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            return emotion, image
+            
+        except Exception as e:
+            print(f"[Camera] Error in capture_and_analyze_emotion: {e}")
+            import traceback
+            traceback.print_exc()
+            return None, None
 
     def cleanup(self):
         """Clean up resources."""
