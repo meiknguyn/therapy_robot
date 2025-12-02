@@ -510,5 +510,20 @@ Potential improvements:
 
 ---
 
+## Individual Contributions (Summary)
+
+This project was completed by a 4-person group.  
+
+**Mike served as the primary developer**, implementing the majority of the system including hardware modules, safety features, AI integration, dashboard, simulation mode, and refactoring.  
+
+Group members contributed feedback, minor documentation, and testing.
+
+For detailed contribution information, please refer to:
+- `INDIVIDUAL_CONTRIBUTION_MIKE.md` - Detailed contribution statement
+- `CONTRIBUTION_BREAKDOWN.md` - Subsystem-by-subsystem breakdown
+- `PROJECT_REFLECTION_MIKE.md` - Development process and reflections
+
+---
+
 **Project Status**: ✅ **FEATURE COMPLETE** - All core features + refactoring improvements implemented and documented!
 
